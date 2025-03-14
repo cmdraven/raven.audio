@@ -1,0 +1,511 @@
+// I am sorry but, if you guys could sort out the files and arrange it in proper folders, I would be gratefull!
+// Raven - Audio Streaming Platform
+// A React-based web application for audio content
+
+// File: App.jsx
+import React, { useState, useEffect } from 'react';
+import './App.css';
+import Header from './components/Header';
+import Sidebar from './components/Sidebar';
+import AudioPlayer from './components/AudioPlayer';
+import ContentGrid from './components/ContentGrid';
+import { fetchAudioContent } from './services/audioService';
+
+function App() {
+  const [audioContent, setAudioContent] = useState([]);
+  const [selectedAudio, setSelectedAudio] = useState(null);
+  const [categories, setCategories] = useState([
+    'Music', 'Podcasts', 'Audiobooks', 'Speeches', 'Nature Sounds', 'ASMR'
+  ]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  useEffect(() => {
+    const loadContent = async () => {
+      setLoading(true);
+      try {
+        // In a real app, this would fetch from an API
+        const content = await fetchAudioContent(selectedCategory, searchQuery);
+        setAudioContent(content);
+      } catch (error) {
+        console.error('Failed to load audio content:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadContent();
+  }, [selectedCategory, searchQuery]);
+  
+  const handleAudioSelect = (audio) => {
+    setSelectedAudio(audio);
+  };
+  
+  const handleCategorySelect = (category) => {
+    setSelectedCategory(category);
+  };
+  
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+  };
+
+  return (
+    <div className="app">
+      <Header onSearch={handleSearch} />
+      <div className="main-content">
+        <Sidebar 
+          categories={categories} 
+          selectedCategory={selectedCategory}
+          onCategorySelect={handleCategorySelect}
+        />
+        <div className="content-area">
+          <h2>{selectedCategory} Audio</h2>
+          {loading ? (
+            <div className="loading">Loading content...</div>
+          ) : (
+            <ContentGrid 
+              audioContent={audioContent} 
+              onAudioSelect={handleAudioSelect}
+            />
+          )}
+        </div>
+      </div>
+      {selectedAudio && (
+        <AudioPlayer audio={selectedAudio} />
+      )}
+    </div>
+  );
+}
+
+export default App;
+
+// File: components/Header.jsx
+import React, { useState } from 'react';
+
+const Header = ({ onSearch }) => {
+  const [searchText, setSearchText] = useState('');
+  
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSearch(searchText);
+  };
+  
+  return (
+    <header className="header">
+      <div className="logo">
+        <h1>Raven</h1>
+        <span className="tagline">Audio for Everyone</span>
+      </div>
+      <form onSubmit={handleSubmit} className="search-form">
+        <input
+          type="text"
+          placeholder="Search for audio..."
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+        />
+        <button type="submit">Search</button>
+      </form>
+      <div className="user-controls">
+        <button className="login-btn">Login</button>
+        <button className="upload-btn">Upload</button>
+      </div>
+    </header>
+  );
+};
+
+export default Header;
+
+// File: components/Sidebar.jsx
+import React from 'react';
+
+const Sidebar = ({ categories, selectedCategory, onCategorySelect }) => {
+  return (
+    <div className="sidebar">
+      <nav>
+        <ul>
+          <li 
+            className={selectedCategory === 'All' ? 'active' : ''}
+            onClick={() => onCategorySelect('All')}
+          >
+            All
+          </li>
+          {categories.map(category => (
+            <li 
+              key={category}
+              className={selectedCategory === category ? 'active' : ''}
+              onClick={() => onCategorySelect(category)}
+            >
+              {category}
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <div className="playlists">
+        <h3>Your Playlists</h3>
+        <ul>
+          <li>Favorites</li>
+          <li>Recently Played</li>
+          <li>Custom Playlist 1</li>
+          <li>Custom Playlist 2</li>
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+export default Sidebar;
+
+// File: components/ContentGrid.jsx
+import React from 'react';
+import AudioCard from './AudioCard';
+
+const ContentGrid = ({ audioContent, onAudioSelect }) => {
+  return (
+    <div className="content-grid">
+      {audioContent.length === 0 ? (
+        <div className="no-content">No audio content found</div>
+      ) : (
+        audioContent.map((audio) => (
+          <AudioCard 
+            key={audio.id} 
+            audio={audio} 
+            onSelect={() => onAudioSelect(audio)}
+          />
+        ))
+      )}
+    </div>
+  );
+};
+
+export default ContentGrid;
+
+// File: components/AudioCard.jsx
+import React from 'react';
+
+const AudioCard = ({ audio, onSelect }) => {
+  return (
+    <div className="audio-card" onClick={onSelect}>
+      <div className="audio-thumbnail">
+        <img src={audio.thumbnailUrl} alt={audio.title} />
+        <span className="duration">{audio.duration}</span>
+      </div>
+      <div className="audio-info">
+        <h3>{audio.title}</h3>
+        <p className="creator">{audio.creator}</p>
+        <div className="stats">
+          <span>{audio.plays} plays</span>
+          <span>{audio.uploadDate}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AudioCard;
+
+// File: components/AudioPlayer.jsx
+import React, { useState, useRef, useEffect } from 'react';
+
+const AudioPlayer = ({ audio }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(0.7);
+  const audioRef = useRef(null);
+  
+  useEffect(() => {
+    // Reset player when audio changes
+    setIsPlaying(false);
+    setCurrentTime(0);
+    
+    const loadMetadata = () => {
+      setDuration(audioRef.current.duration);
+    };
+    
+    if (audioRef.current) {
+      audioRef.current.addEventListener('loadedmetadata', loadMetadata);
+      
+      return () => {
+        audioRef.current.removeEventListener('loadedmetadata', loadMetadata);
+      };
+    }
+  }, [audio]);
+  
+  useEffect(() => {
+    if (isPlaying) {
+      audioRef.current.play();
+    } else {
+      audioRef.current.pause();
+    }
+  }, [isPlaying]);
+  
+  useEffect(() => {
+    audioRef.current.volume = volume;
+  }, [volume]);
+  
+  const handleTimeUpdate = () => {
+    setCurrentTime(audioRef.current.currentTime);
+  };
+  
+  const handleProgressChange = (e) => {
+    const newTime = parseFloat(e.target.value);
+    setCurrentTime(newTime);
+    audioRef.current.currentTime = newTime;
+  };
+  
+  const formatTime = (timeInSeconds) => {
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = Math.floor(timeInSeconds % 60);
+    return `${minutes}:${seconds < 10 ? '0' + seconds : seconds}`;
+  };
+  
+  return (
+    <div className="audio-player">
+      <audio
+        ref={audioRef}
+        src={audio.audioUrl}
+        onTimeUpdate={handleTimeUpdate}
+        onEnded={() => setIsPlaying(false)}
+      />
+      
+      <div className="player-info">
+        <img src={audio.thumbnailUrl} alt={audio.title} className="player-thumbnail" />
+        <div className="player-details">
+          <h3>{audio.title}</h3>
+          <p>{audio.creator}</p>
+        </div>
+      </div>
+      
+      <div className="player-controls">
+        <button className="prev-btn">
+          ⏮
+        </button>
+        <button className="play-btn" onClick={() => setIsPlaying(!isPlaying)}>
+          {isPlaying ? '⏸' : '▶'}
+        </button>
+        <button className="next-btn">
+          ⏭
+        </button>
+      </div>
+      
+      <div className="progress-container">
+        <span className="time-current">{formatTime(currentTime)}</span>
+        <input
+          type="range"
+          min={0}
+          max={duration || 0}
+          value={currentTime}
+          onChange={handleProgressChange}
+          className="progress-bar"
+        />
+        <span className="time-total">{formatTime(duration)}</span>
+      </div>
+      
+      <div className="volume-control">
+        <span className="volume-icon">🔊</span>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={volume}
+          onChange={(e) => setVolume(parseFloat(e.target.value))}
+          className="volume-slider"
+        />
+      </div>
+    </div>
+  );
+};
+
+export default AudioPlayer;
+
+// File: services/audioService.js
+// In a real application, this would connect to a backend API
+
+export const fetchAudioContent = async (category, searchQuery) => {
+  // Simulate API call delay
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  // Mock data
+  const mockAudioContent = [
+    {
+      id: 1,
+      title: "Summer Vibes Mix",
+      creator: "DJ Wavelength",
+      thumbnailUrl: "/api/placeholder/320/180",
+      audioUrl: "https://example.com/audio1.mp3",
+      duration: "3:45",
+      plays: 1243,
+      uploadDate: "2 days ago",
+      category: "Music"
+    },
+    {
+      id: 2,
+      title: "The History of Philosophy - Episode 5",
+      creator: "Deep Thinkers Podcast",
+      thumbnailUrl: "/api/placeholder/320/180",
+      audioUrl: "https://example.com/audio2.mp3",
+      duration: "45:22",
+      plays: 532,
+      uploadDate: "1 week ago",
+      category: "Podcasts"
+    },
+    {
+      id: 3,
+      title: "Pride and Prejudice - Chapter 1",
+      creator: "Literary Voices",
+      thumbnailUrl: "/api/placeholder/320/180",
+      audioUrl: "https://example.com/audio3.mp3",
+      duration: "18:15",
+      plays: 892,
+      uploadDate: "3 days ago",
+      category: "Audiobooks"
+    },
+    {
+      id: 4,
+      title: "Thunderstorm Ambience for Sleep",
+      creator: "Nature Recordings",
+      thumbnailUrl: "/api/placeholder/320/180",
+      audioUrl: "https://example.com/audio4.mp3",
+      duration: "1:20:00",
+      plays: 1528,
+      uploadDate: "5 days ago",
+      category: "Nature Sounds"
+    },
+    {
+      id: 5,
+      title: "Martin Luther King Jr. - I Have a Dream",
+      creator: "Historical Archives",
+      thumbnailUrl: "/api/placeholder/320/180",
+      audioUrl: "https://example.com/audio5.mp3",
+      duration: "17:28",
+      plays: 4253,
+      uploadDate: "2 months ago",
+      category: "Speeches"
+    },
+    {
+      id: 6,
+      title: "Gentle Tapping and Whispering",
+      creator: "ASMR Haven",
+      thumbnailUrl: "/api/placeholder/320/180",
+      audioUrl: "https://example.com/audio6.mp3",
+      duration: "35:10",
+      plays: 967,
+      uploadDate: "1 day ago",
+      category: "ASMR"
+    },
+    {
+      id: 7,
+      title: "Classical Piano Collections",
+      creator: "Symphony Channel",
+      thumbnailUrl: "/api/placeholder/320/180",
+      audioUrl: "https://example.com/audio7.mp3",
+      duration: "52:40",
+      plays: 735,
+      uploadDate: "4 days ago",
+      category: "Music"
+    },
+    {
+      id: 8,
+      title: "Mindfulness Meditation Guide",
+      creator: "Inner Peace",
+      thumbnailUrl: "/api/placeholder/320/180",
+      audioUrl: "https://example.com/audio8.mp3",
+      duration: "25:18",
+      plays: 2156,
+      uploadDate: "2 weeks ago",
+      category: "Podcasts"
+    }
+  ];
+  
+  // Filter by category if needed
+  let filteredContent = mockAudioContent;
+  if (category !== 'All') {
+    filteredContent = mockAudioContent.filter(item => item.category === category);
+  }
+  
+  // Filter by search query if provided
+  if (searchQuery) {
+    filteredContent = filteredContent.filter(item => 
+      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.creator.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }
+  
+  return filteredContent;
+};
+
+// File: App.css
+/* Main App Layout */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.content-area {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+/* Header Styles */
+.header {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  background-color: #0f0f0f;
+  color: white;
+}
+
+.logo {
+  display: flex;
+  align-items: baseline;
+}
+
+.logo h1 {
+  margin: 0;
+  font-size: 24px;
+  margin-right: 10px;
+}
+
+.tagline {
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+.search-form {
+  flex: 1;
+  display: flex;
+  margin: 0 20px;
+}
+
+.search-form input {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 20px 0 0 20px;
+}
+
+.search-form button {
+  padding: 10px 15px;
+  border: none;
+  background-color: #272727;
+  color: white;
+  border-radius: 0 20px 20px 0;
+  cursor: pointer;
+}
+
+.user-controls {
+  display: flex;
+  gap: 10px;
+}
+Made with
